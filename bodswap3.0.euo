@@ -1,0 +1,536 @@
+; =====================================================================
+; Script Name: Penny's Bod Swapper
+; Author: Pennylane
+; Version: 3.0
+; Client Tested With: 7.0.65.4
+; Euo Version Tested With: 1.6.0.330
+; Shard Osi / Fs: OSI
+; Revision Date: 06/23/2018
+; Public Release: 10/24/05
+; Global Variables Used: N/A
+; Purpose:exchanges filled bods for new, banking points or selecting the
+; maximum possible reward.
+; =====================================================================
+; --------------------------Version Updates----------------------------
+; =====================================================================
+; ver 3.0 June 2018
+; complete overhaul for new bod types and new points system
+; =====================================================================
+; ---------------------------Instructions--------------------------------
+; =====================================================================
+; -Have 2 bod books in your pack, one with your filled bods and one that is empty.
+; -Press Play and follow the prompts.
+; =====================================================================
+; ------------------------- Hardcode Options --------------------------
+; =====================================================================
+; If you don't know what you are doing, or if you use different books,
+; bags, or vendor shops each time, don't alter these. This is for people
+; who wish to hardcode their own setup.
+set %filledBodBook N/A
+set %emptyBodBook N/A
+set %rewardBag N/A
+set %alchemyVendor N/A
+set %blacksmithVendor N/A
+set %bowcraftVendor N/A
+set %carpentryVendor N/A
+set %cookingVendor N/A
+set %incriptionVendor N/A
+set %tailorVendor N/A
+set %tinkerVendor N/A
+; ===================================================================== ;
+; ----------------------do not edit beyond here------------------------ ;
+; ===================================================================== ;
+ignoreitem reset
+set %human HS_IS
+set %elf AV_XU
+set %garg OCB_NCB
+set %shortwait 10
+set %longwait 20
+set %bodbooksize 620_459
+set %bodbookfiltersize 620_715
+set %bodType EYM
+set %bodBookType DYM
+set %bodBookGumpName generic_gump
+set %bagType zjf_lkf_ckf
+set %tailorLoot bui_tvh_ewh_nvi_pof
+set %smithLoot bmh_keg_npf_qpf_tvh_gbg_tlh_xkh_skh_kkh_twf_ewh_pof_fwr_gyhc_gaic
+set %packAnimal bo_wn_zgb
+set %combined_cloth bui
+set %ingots enk
+set %tinkeKit JTL_KTL_GTL
+set %sewingKit hag
+set %dyeTub dbg
+set %bodCloth dui_aui_fui_gui
+set %vendorType hs_is_ncb_ocb_av_xu
+set %maxWeight #MAXWEIGHT - 20
+;�����������������������������������������������������������������������������
+set %turnedIn 0
+gosub setup
+gosub startMenu
+gosub menuManager
+gosub chooseBodType
+;gosub getNewBods 3
+Main:
+  set %getNew #true
+  gosub turnIn
+  if %getNew
+    gosub getNewBods 1
+  set %turnedIn %turnedIn + 1
+  gosub menuManager
+  gosub weightCheck
+  goto Main
+;�����������������������������������������������������������������������������
+;=====================================
+sub startMenu
+;=====================================
+START_MENU_LOOP:
+gosub displayMenu
+while #MENUBUTTON <> startButton
+  wait %shortwait
+set #MENUBUTTON N/A
+menu get bodBox
+wait %shortwait
+if #MENURES = 0
+{
+ Display OK Please select the bod type
+ goto START_MENU_LOOP
+}
+menu get rewardBox
+if #MENURES = 0
+{
+ Display OK Please select the reward type
+ goto START_MENU_LOOP
+}
+menu set startButton Pause
+return
+;=====================================
+sub menuManager
+;=====================================
+if #MENUBUTTON = startButton
+{
+  display OK Script Paused. $
+  +Please press play in the EasyUo Window to continue
+  pause
+  set #MENUBUTTON N/A
+}
+gosub itemCheck
+menu set current_items %itemCount
+menu set current_weight #WEIGHT
+menu set turned_in %turnedIn
+gosub bodsRemaining
+menu set bods_remaining %bodsRemaining
+menu get bodbox
+wait %shortwait
+if #MENURES = 1
+{
+  set %skillChosen Alchemy
+}
+if #MENURES = 2
+{
+  set %skillChosen Blacksmith
+}
+if #MENURES = 3
+{
+  set %skillChosen Bowcraft
+}
+if #MENURES = 4
+{
+  set %skillChosen Carpentry
+}
+if #MENURES = 5
+{
+  set %skillChosen Cooking
+}
+if #MENURES = 6
+{
+  set %skillChosen Inscription
+}
+if #MENURES = 7
+{
+  set %skillChosen Tailoring
+}
+if #MENURES = 8
+{
+  set %skillChosen Tinkering
+}
+menu get rewardBox
+wait %shortwait
+if #MENURES = 1
+  set %getReward #FALSE
+if #MENURES = 2
+  set %getReward #TRUE
+return
+;=====================================
+sub bodsRemaining
+;=====================================
+event property %filledBodBook
+set %string #PROPERTY
+str pos %string : 2
+set %secondColonPosition 54
+str pos %string $ 4
+set %fourthReturnPosition #STRRES
+set %midLength %fourthReturnPosition - %secondColonPosition
+str mid %string %secondColonPosition %midLength
+set %mid #STRRES
+str del %mid 1 2
+set %bodsRemaining #STRRES
+return
+;=====================================
+sub waitForGump
+;parameters
+;%1 cont_size
+;%2 cont_name
+;%3 description
+;=====================================
+  WAITLOOP:
+  set %beenwaiting %beenwaiting + 1
+  if #CONTSIZE = %1 && #CONTNAME = %2
+  {
+    set %beenwaiting 0
+    return
+  }
+  wait %shortwait
+  if %beenwaiting >= 20
+  {
+    return #FALSE
+  }
+  goto WAITLOOP
+;=====================================
+sub dropBodFromBook
+;=====================================
+  if %emptyBook
+    goto EMPTY_BOOK
+  ;find out how many items are in the backpack
+  ;so we can see the item # increase if bod is dropped
+  finditem * C_ , #BACKPACKID
+  set %itemCount #FINDCNT
+  finditem %filledBodBook C_ , #BACKPACKID
+  set #LOBJECTID #FINDID
+  event macro 17 0
+  gosub waitForGump %bodBookSize %bodBookGumpName FilledBook
+  if #RESULT = #FALSE
+  {
+    if #CONTSIZE <> %bodBookSize && The_book_is_empty. in #SYSMSG
+    {
+      EMPTY_BOOK:
+      display ok No more bods to turn in$
+      +I hope you found this script helpful$
+      +Thank you for rating it$
+      halt
+    }
+  }
+DROP_BOD:
+  ;if the book opened, drop a bod
+  set %lastCount #FINDCNT
+  gosub clickOffset 40 100 ; drop the 1st bod
+  finditem * C_ , #BACKPACKID ; count items again
+  if %lastCount = #FINDCNT ; if the bod did not drop into the backpack
+  {
+    if There_is_not_enough_room in #SYSMSG
+      ;gosub emptyLootToPacky
+    ;goto DROP_BOD
+    display OK There is no more room in your backpack.$
+    +Please unload some items and start again.
+    halt
+  }
+  wait %longwait
+  if #CONTSIZE <> %bodBookSize && The_book_is_empty. in #SYSMSG
+  set %emptyBook #TRUE
+  gosub clickOffset 385 425 ;close the bod book
+  wait %shortwait
+return
+;=====================================
+sub turnIn
+;=====================================
+  gosub moveToBodGuy
+  gosub dropBodFromBook
+GIVE_BOD:
+  set %journal #JINDEX
+  finditem %bodType C_ , #BACKPACKID
+  set %filledBod #FINDID
+  wait %shortwait
+  exevent drag %filledBod
+  wait %longwait
+  exevent dropc %bodGuy
+  wait %longwait
+  for %i %journal #JINDEX
+  {
+    scanjournal %i
+    if I_am_not_interested_in_this. in #JOURNAL
+    {
+      gosub putBodInBook
+      ;set %getNew #FALSE
+      gosub dropBodFromBook
+      goto GIVE_BOD
+    }
+  }
+  finditem %bodType C_ , #BACKPACKID
+  if #FINDKIND = -1
+  {
+    if ! %getReward
+    {
+      gosub clickOffset 40 188 ;click bank points
+      wait %longwait
+      gosub clickOffset 295 230 ; click ok
+      wait %longwait
+    }
+    if %getReward
+    {
+      display OK Pausing the script while you select your reward$
+      +Please press play again after you have selected your reward
+      pause
+    }
+    return
+  }
+; handle rewards
+
+;=====================================
+sub moveToBodGuy
+;=====================================
+MOVE_TO_BOD_GUY:
+    finditem %bodGuy g_2
+    if #FINDKIND = -1
+    {
+      finditem %bodGuy g_8
+      set %x #FINDX - 1
+      set %y #FINDY - 1
+      event pathfind %x %y
+      wait %longwait
+      goto MOVE_TO_BOD_GUY
+    }
+  return
+;=====================================
+sub waitForVendorGump
+;=====================================
+  set %vendorGumpOpen #TRUE
+  set %vendorGumpCount 0
+  WAIT_FOR_VENDOR_GUMP:
+  if #CONTNAME = normal_gump && ( #CONTSIZE = 134_168 )
+  + || ( #CONTSIZE = 142_240 ) || ( #CONTSIZE = 116_150 )
+  + || ( #CONTSIZE = 214_204 ) || ( #CONTSIZE = 139_168 )
+  + || ( #CONTSIZE = 183_168 ) || ( #CONTSIZE = 214_168 )
+  + || ( #CONTSIZE = 170_168 ) || ( #CONTSIZE = 214_186 )
+  + || ( #CONTSIZE = 171_150 ) || ( #CONTSIZE = 171_168 )
+  + || ( #CONTSIZE = 183_204 )
+  {
+    return
+  }
+  if %vendorGumpCount >= 50
+  {
+    set %vendorGumpOpen #FALSE
+    return
+  }
+  wait 20
+  set %vendorGumpCount %vendorGumpCount + 1
+  goto WAIT_FOR_VENDOR_GUMP
+; ===================================================================== ;
+; -----------------------------setup subs------------------------------ ;
+; ===================================================================== ;
+  sub setup
+    event macro 31 0 ;close all gumps
+    wait %longwait
+    ;paper doll
+    event macro 8 1
+    gosub waitForGump 262_324 paperdoll_gump PaperDoll
+    %longwait
+    ;status bar
+    event macro 8 2
+    gosub waitForGump 584_216 status_gump StatusBar
+    event macro 10 2 ;minimize gump
+    wait %longwait
+    ;backpack
+    event macro 8 7
+    gosub waitForGump 230_204 container_gump Backpack
+    wait %longwait
+    gosub bodBookSetup
+    display ok Please target the bod NPC you'd like to use
+    gosub waitForTarget %vendorType
+    set %bodGuy #RESULT
+    return
+;=====================================
+sub getNewBods
+;Parameter
+;%1 number of bods to get. 3 for new day bods, 1 for flip bod
+;=====================================
+gosub moveToBodGuy
+for %i 1 %1
+{
+  exevent popup %bodGuy
+  gosub waitForVendorGump
+  if %vendorGumpOpen
+  {
+  gosub clickOffset 40 40
+  wait 1s
+  set %clicky #CONTSIZEY - 25
+  gosub clickOffset 110 %clicky
+  wait 1s
+  }
+}
+else
+{
+  display OK There is an error with the bod gump.$
+  +Please collect container size info, vendor name$
+  +and location and give it to Penny so she can$
+  +troubleshoot the script. Thank you!
+}
+gosub putBodInBook
+return
+;=====================================
+sub bodBookSetup
+;=====================================
+display ok Please target your filled bod book.
+gosub waitForTarget %bodBookType
+set %filledBodBook #RESULT
+wait %longwait
+display ok Please target your empty bod book.
+gosub waitForTarget %bodBookType
+set %emptyBodBook #RESULT
+wait %longwait
+return
+;=====================================
+sub chooseBodType
+;=====================================
+set #LOBJECTID %filledBodBook
+event macro 17 0
+gosub waitForGump 620_459 generic_gump FilledBodBook
+wait %shortwait
+gosub clickOffset 48 44 ;open filter
+gosub waitForGump 620_715 generic_gump BodBookFilterPage
+wait %shortwait
+gosub clickOffset 380 680 ;clear filter
+wait %shortwait
+if %skillChosen = Alchemy
+  set %clicky 525
+if %skillChosen = Blacksmith
+  set %clicky 170
+if %skillChosen = Bowcraft
+  set %clicky 460
+if %skillChosen = Carpentry
+  set %clicky 395
+if %skillChosen = Cooking
+  set %clicky 585
+if %skillChosen = Inscription
+  set %clicky 555
+if %skillChosen = Tailoring
+  set %clicky 245
+if %skillChosen = Tinkering
+  set %clicky 300
+gosub clickOffset 40 %clicky
+wait %shortwait
+gosub clickOffset 520 680 ;click Apply
+wait %shortwait
+gosub clickOffset 385 425 ;click exit
+return
+;=====================================
+sub putBodInBook
+;=====================================
+finditem %bodType C_ , #BACKPACKID
+for %i 1 #FINDCNT
+{
+  finditem %bodType C_ , #BACKPACKID
+  exevent drag #FINDID
+  wait %shortwait
+  exevent dropc %emptyBodBook
+  wait %shortwait
+  gosub clickOffset 385 425 ;click exit
+}
+return
+;=====================================
+gosub clearBookFilter
+;=====================================
+;TODO
+;=====================================
+sub clickOffset
+;=====================================
+  set %clickx #CONTPOSX + %1
+  set %clicky #CONTPOSY + %2
+  click %clickx %clicky f
+  return
+;=====================================
+sub weightCheck
+;=====================================
+  if #WEIGHT >= %maxWeight
+  {
+    display OK Your character is at max weight$
+    halt
+  }
+  return
+;=====================================
+sub itemCheck
+;=====================================
+event property #BACKPACKID
+set %backpackString #PROPERTY
+str pos %backpackString /
+set %rightSide #STRRES
+str pos %backpackString Contents:
+set %leftSide #STRRES + 10
+set %positionDiff %rightSide - %leftSide
+str mid %backpackString %leftSide %positionDiff
+set %itemCount #STRRES
+if %itemCount > 120
+{
+  display OK Your backpack is too full to safely continue$
+  halt
+}
+return
+;=====================================
+sub waitForTarget
+;returns #LTARGETID
+;=====================================
+SET_TARGET_CURSOR:
+set #TARGCURS 1
+while #TARGCURS = 1
+  wait %shortwait
+set %object #LTARGETID
+finditem %object
+if #FINDTYPE notin %1
+{
+  display OK This is not the right item type$
+  +Please try again
+  goto SET_TARGET_CURSOR
+}
+return %object
+;=====================================
+sub displayMenu
+;=====================================
+ menu Clear
+ menu Window Title Penny's Bod Swapper
+ menu Window Color Gray
+ menu Window Size 349 139
+ menu Font Transparent #true
+ menu Font Align Right
+ menu Font Name MS Sans Serif
+ menu Font Size 8
+ menu Font Style
+ menu Font Color White
+ menu Font Transparent #false
+ menu Font Align Left
+ menu Font BGColor Gray
+ menu Text EUOLabel1 10 10 BOD Type:
+ menu Text bank_or_reward 10 50 Bank Points / Reward
+ menu Text current_items_title 165 15 Current Items:
+ menu Text current_weight_title 165 35 Current Weight:
+ menu Text current_items 255 15 %current_items
+ menu Text turned_in 255 55 %turned_in
+ menu Text current_weight 255 35 %current_weight
+ menu Text turned_in_title 165 55 BODs Turned In:
+ menu Text remaining_title 165 75 BODs Remaining:
+ menu Text bods_remaining 255 75 %bods_remaining
+ menu Font BGColor GrayText
+ menu Combo Create bodBox 10 25 145
+ menu Combo Add bodBox Alchemy
+ menu Combo Add bodBox Blacksmith
+ menu Combo Add bodBox Bowcraft
+ menu Combo Add bodBox Carpentry
+ menu Combo Add bodBox Cooking
+ menu Combo Add bodBox Inscription
+ menu Combo Add bodBox Tailoring
+ menu Combo Add bodBox Tinkering
+menu Combo Create rewardBox 10 65 145
+ menu Combo Add rewardBox Bank Points
+ menu Combo Add rewardBox SelectReward
+  menu Font Color WindowText
+ menu Font BGColor BtnFace
+ menu Button startButton 140 95 75 30 Start
+ menu Show 421 270
+return
