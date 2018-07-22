@@ -449,7 +449,7 @@ sub clickOffset
 ;=====================================
 sub weightCheck
 ;=====================================
-  if #WEIGHT >= %maxWeight
+  if #WEIGHT >= #maxWeight
   {
     display OK Your character is at max weight$
     halt
